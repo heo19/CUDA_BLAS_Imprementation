@@ -45,7 +45,39 @@ void mul(float *a, float *b, float *c, size_t n)
   }
 }    
 """
-
+dot = """\
+extern "C" __global__
+void dot(float* a, float* b, float* c, size_t n) {
+    size_t index = threadIdx.x + blockIdx.x * blockDim.x;
+    size_t stride = blockDim.x * gridDim.x;
+    
+    __shared__ float cache[512];
+    
+    float temp = 0.0;
+    while(index < n) {
+        temp += a[index] * b[index];
+        index += stride;
+    }
+    
+    cache[threadIdx.x] = temp;
+    
+    __syncthreads();
+    
+    size_t i = blockDim.x / 2;
+    
+    while(i != 0) {
+        if(threadIdx.x < i) {
+            cache[threadIdx.x] += cache[threadIdx.x + i];
+        }
+        __syncthreads();
+        i /= 2;
+    }
+    
+    if(threadIdx.x == 0) {
+        atomicAdd(c, cache[0]);
+    }
+}   
+"""
 
 def execute_kernel(kernel_code, kernel_name):
     NUM_THREADS = 512  # Threads per block
@@ -148,3 +180,4 @@ def execute_kernel(kernel_code, kernel_name):
 execute_kernel(add, "add")
 execute_kernel(sub, "sub")
 execute_kernel(mul, "mul")
+execute_kernel(dot, "dot")
